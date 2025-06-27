@@ -3,18 +3,21 @@ import logging
 import os
 import MySQLdb
 from mcp.server.fastmcp import FastMCP
+from datetime import datetime
 
 # 创建 MCP 服务实例
-mcp = FastMCP("test-server")
+mcp = FastMCP("mcp-mysql")
+
+
+log_file = "mcp_mysql.log"
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("test-mcp-server")
-
-# 使用内存模拟数据库结构和数据
-DATABASE_NAME = "test_db"
+logger = logging.getLogger(__name__)
+handler = logging.FileHandler("log.txt")
+logger.addHandler(handler)
 
 
 DB_CONFIG = {
@@ -107,12 +110,20 @@ def is_safe_query(sql: str) -> bool:
 @mcp.tool()
 def query_data(sql: str) -> Dict[str, Any]:
     """Execute read-only SQL queries"""
+
+    print("\n ----- mcping ------ \n")
+
+    timestamp = datetime.now().isoformat()
+
     if not is_safe_query(sql):
+        logger.warning(f"[{timestamp}] [Blocked] Unsafe query attempt: {sql}")
         return {
             "success": False,
             "error": "Potentially unsafe query detected. Only SELECT queries are allowed."
         }
-    logger.info(f"Executing query: {sql}")
+    
+    logger.info(f"[{timestamp}] Executing SQL: {sql}")
+
     conn = get_connection()
     cursor = None
     try:
@@ -127,6 +138,9 @@ def query_data(sql: str) -> Dict[str, Any]:
             cursor.execute(sql)
             results = cursor.fetchall()
             conn.commit()
+
+            logger.info(f"[{timestamp}] Query succeeded. Rows returned: {len(results)}")
+            print("\n ----- logging ------ \n")
             
             # Convert results to serializable format
             return {
@@ -136,6 +150,7 @@ def query_data(sql: str) -> Dict[str, Any]:
             }
         except Exception as e:
             conn.rollback()
+            logger.error(f"[{timestamp}] Query failed: {sql} | Error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e)
