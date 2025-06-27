@@ -9,6 +9,7 @@ from datetime import datetime
 mcp = FastMCP("mcp-mysql")
 
 
+# 日志初始化
 log_file = "mcp_mysql.log"
 
 logging.basicConfig(
@@ -18,6 +19,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 handler = logging.FileHandler("log.txt")
 logger.addHandler(handler)
+
+
+# 敏感字段列表
+SENSITIVE_FIELDS = {"password", "salary"}
 
 
 DB_CONFIG = {
@@ -35,6 +40,11 @@ def get_connection():
     except MySQLdb.Error as e:
         print(f"Database connection error: {e}")
         raise
+    sql_lower = sql.lower()
+    for field in SENSITIVE_FIELDS:
+        if field.lower() in sql_lower:
+            return True
+    return False
 
 
 @mcp.resource("mysql://schema")
@@ -107,6 +117,14 @@ def is_safe_query(sql: str) -> bool:
     unsafe_keywords = ["insert", "update", "delete", "drop", "alter", "truncate", "create"]
     return sql_lower.strip().startswith("select") and not any(k in sql_lower for k in unsafe_keywords)
 
+def contains_sensitive_field(sql: str) -> bool:
+    sql_lower = sql.lower()
+    for field in SENSITIVE_FIELDS:
+        if field.lower() in sql_lower:
+            return True
+    return False
+
+
 @mcp.tool()
 def query_data(sql: str) -> Dict[str, Any]:
     """Execute read-only SQL queries"""
@@ -121,6 +139,15 @@ def query_data(sql: str) -> Dict[str, Any]:
             "success": False,
             "error": "Potentially unsafe query detected. Only SELECT queries are allowed."
         }
+    
+    if contains_sensitive_field(sql):
+        logger.warning(f"[{timestamp}] [Blocked] Sensitive field access attempt: {sql}")
+        return {
+            "success": False,
+            "error": "Access to sensitive fields like 'password' or 'salary' is not allowed."
+        }
+
+
     
     logger.info(f"[{timestamp}] Executing SQL: {sql}")
 

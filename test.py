@@ -34,6 +34,7 @@ def pretty_print_json(data):
     """美化打印 JSON 对象"""
     print(json.dumps(data, indent=2, ensure_ascii=False))
 
+
 # --- 3. 新增: 通义 API 调用模块 ---
 async def generate_sql_with_llm(user_query: str, schema_json: dict) -> str:
     """
@@ -65,6 +66,7 @@ async def generate_sql_with_llm(user_query: str, schema_json: dict) -> str:
     1.  你只能生成 `SELECT` 语句。
     2.  确保查询的表名和字段名与上述结构信息中的完全一致。
     3.  最终的输出结果中，只能包含 SQL 语句，不要包含任何额外的解释、注释或格式化（如 ```sql ... ```）。
+    4.  你被禁止查询包含 password、salary 等字段
 
     **用户问题:**
     "{user_query}"
@@ -117,6 +119,7 @@ async def generate_sql_with_llm(user_query: str, schema_json: dict) -> str:
         return None
 
 
+
 # --- 4. 修改: 主程序逻辑，实现查询控制与 CLI 界面 ---
 async def interactive_cli():
     """
@@ -130,6 +133,12 @@ async def interactive_cli():
         print("例如 (Linux/macOS): export TONGYI_API_KEY='sk-xxxxxxxx'")
         print("或直接在脚本中修改 TONGYI_API_KEY 变量。")
         return
+
+    # 分页相关逻辑变量
+    page_size = 5
+    last_results = []
+    current_page = 0
+
 
     print("正在启动 MCP 客户端并连接到服务...")
     try:
@@ -169,14 +178,30 @@ async def interactive_cli():
 
                 while True:
                     print("-" * 60)
-                    user_input = input("请输入你的问题 > ")
+                    user_input = input("请输入你的问题（或指令） > ")
 
                     if user_input.lower() in ["exit", "quit"]:
                         print("再见！")
                         break
                     
-                    if not user_input:
+
+                    # 分页命令：
+                    if user_input.lower() == "next":
+                        if not last_results:
+                            print("没有可分页的结果，请先执行查询。")
+                            continue
+                        start = current_page * page_size
+                        end = start + page_size
+                        page = last_results[start:end]
+                        if page:
+                            print_header(f"第 {current_page + 1} 页结果", "-")
+                            pretty_print_json(page)
+                            current_page += 1
+                        else:
+                            print("已经是最后一页了。")
                         continue
+
+
 
                     # 1. 自然语言 -> SQL (通过 LLM)
                     sql_query = await generate_sql_with_llm(user_input, schema_info)
@@ -185,9 +210,11 @@ async def interactive_cli():
                         print("\n无法执行查询，因为未能成功生成 SQL。请尝试换个问法。")
                         continue
                     
+
                     # 2. 执行 SQL (通过 MCP Tool)
                     print(f"> [MCP] 正在使用工具 'query_data' 执行 SQL...")
                     tool_result = await session.call_tool("query_data", {"sql": sql_query})
+
 
                     # 3. 解析并返回 JSON 结果
                     print("> [MCP] 收到查询结果:")
@@ -196,12 +223,19 @@ async def interactive_cli():
                     result_data = structured.get("result", {})
 
                     if result_data.get("success"):
-                        print_header("查询成功", "-")
-                        pretty_print_json(result_data.get("results", []))
-                        print(f"影响行数: {result_data.get('rowCount', 0)}")
+                        last_results = result_data.get("results", [])
+                        current_page = 0
+                        total = len(last_results)
+                        print(f"> 查询总记录数：{total}，每页 {page_size} 条，可使用 'next' 查看后续。")
+
+                        # 显示第一页
+                        page = last_results[:page_size]
+                        print_header(f"第 1 页结果", "-")
+                        pretty_print_json(page)
+                        current_page += 1
                     else:
                         print_header("查询失败", "!")
-                        pretty_print_json(tool_result)
+                        print('\n' + result_data.get("error") + '\n')
 
 
     except Exception as e:
