@@ -1,5 +1,7 @@
 from typing import Any, Dict
 import logging
+import os
+import MySQLdb
 from mcp.server.fastmcp import FastMCP
 
 # 创建 MCP 服务实例
@@ -14,46 +16,87 @@ logger = logging.getLogger("test-mcp-server")
 # 使用内存模拟数据库结构和数据
 DATABASE_NAME = "test_db"
 
-TABLES = {
-    "users": [
-        {"id": 1, "name": "Alice", "age": 30},
-        {"id": 2, "name": "Bob", "age": 25},
-        {"id": 3, "name": "Charlie", "age": 35}
-    ],
-    "products": [
-        {"id": 101, "product_name": "Phone", "price": 699},
-        {"id": 102, "product_name": "Laptop", "price": 1299}
-    ]
+
+DB_CONFIG = {
+    "host": os.getenv("DB_HOST", "localhost"),
+    "user": os.getenv("DB_USER", "root"),
+    "passwd": os.getenv("DB_PASSWORD", "123456"), 
+    "db": os.getenv("DB_NAME", "college"),  
+    "port": int(os.getenv("DB_PORT", 3306))
 }
 
-SCHEMA = {
-    "users": [
-        {"name": "id", "type": "int", "null": "NO", "key": "PRI", "default": None, "extra": ""},
-        {"name": "name", "type": "varchar(255)", "null": "YES", "key": "", "default": None, "extra": ""},
-        {"name": "age", "type": "int", "null": "YES", "key": "", "default": None, "extra": ""}
-    ],
-    "products": [
-        {"name": "id", "type": "int", "null": "NO", "key": "PRI", "default": None, "extra": ""},
-        {"name": "product_name", "type": "varchar(255)", "null": "YES", "key": "", "default": None, "extra": ""},
-        {"name": "price", "type": "int", "null": "YES", "key": "", "default": None, "extra": ""}
-    ]
-}
+
+def get_connection():
+    try:
+        return MySQLdb.connect(**DB_CONFIG)
+    except MySQLdb.Error as e:
+        print(f"Database connection error: {e}")
+        raise
+
 
 @mcp.resource("mysql://schema")
 def get_schema() -> Dict[str, Any]:
-    """返回模拟的数据库表结构信息"""
-    return {
-        "database": DATABASE_NAME,
-        "tables": SCHEMA
-    }
+    """Provide database table structure information"""
+    conn = get_connection()
+    cursor = None
+    try:
+        # Create dictionary cursor
+        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+        
+        # Get all table names
+        cursor.execute("SHOW TABLES")
+        tables = cursor.fetchall()
+        table_names = [list(table.values())[0] for table in tables]
+        
+        # Get structure for each table
+        schema = {}
+        for table_name in table_names:
+            cursor.execute(f"DESCRIBE `{table_name}`")
+            columns = cursor.fetchall()
+            table_schema = []
+            
+            for column in columns:
+                table_schema.append({
+                    "name": column["Field"],
+                    "type": column["Type"],
+                    "null": column["Null"],
+                    "key": column["Key"],
+                    "default": column["Default"],
+                    "extra": column["Extra"]
+                })
+            
+            schema[table_name] = table_schema
+        
+        return {
+            "database": DB_CONFIG["db"],
+            "tables": schema
+        }
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
 
 @mcp.resource("mysql://tables")
 def get_tables() -> Dict[str, Any]:
-    """返回模拟的数据库表名列表"""
-    return {
-        "database": DATABASE_NAME,
-        "tables": list(TABLES.keys())
-    }
+    """Provide database table list"""
+    conn = get_connection()
+    cursor = None
+    try:
+        # Create dictionary cursor
+        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+        
+        cursor.execute("SHOW TABLES")
+        tables = cursor.fetchall()
+        table_names = [list(table.values())[0] for table in tables]
+        
+        return {
+            "database": DB_CONFIG["db"],
+            "tables": table_names
+        }
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
 
 def is_safe_query(sql: str) -> bool:
     """简单判断只允许 SELECT 语句"""
@@ -63,50 +106,47 @@ def is_safe_query(sql: str) -> bool:
 
 @mcp.tool()
 def query_data(sql: str) -> Dict[str, Any]:
-    """模拟执行只读 SQL 查询，仅支持简单 SELECT * FROM table_name"""
+    """Execute read-only SQL queries"""
     if not is_safe_query(sql):
         return {
             "success": False,
-            "error": "Potentially unsafe query detected. Only simple SELECT queries are allowed."
+            "error": "Potentially unsafe query detected. Only SELECT queries are allowed."
         }
-    sql_lower = sql.lower()
+    logger.info(f"Executing query: {sql}")
+    conn = get_connection()
+    cursor = None
     try:
-        from_index = sql_lower.index("from") + 4
-        after_from = sql_lower[from_index:].strip()
-        table_name = after_from.split()[0]
-    except Exception:
-        return {
-            "success": False,
-            "error": "Failed to parse table name from SQL."
-        }
-
-    if table_name not in TABLES:
-        return {
-            "success": False,
-            "error": f"Table '{table_name}' not found."
-        }
-
-    results = TABLES[table_name]
-    limit = None
-    if "limit" in sql_lower:
+        # Create dictionary cursor
+        cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+        
+        # Start read-only transaction
+        cursor.execute("SET TRANSACTION READ ONLY")
+        cursor.execute("START TRANSACTION")
+        
         try:
-            limit_part = sql_lower.split("limit")[1].strip()
-            limit = int(limit_part.split()[0])
-        except Exception:
-            pass
-
-    if limit:
-        results = results[:limit]
-
-    return {
-        "success": True,
-        "results": results,
-        "rowCount": len(results)
-    }
+            cursor.execute(sql)
+            results = cursor.fetchall()
+            conn.commit()
+            
+            # Convert results to serializable format
+            return {
+                "success": True,
+                "results": results,
+                "rowCount": len(results)
+            }
+        except Exception as e:
+            conn.rollback()
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
 
 def main():
-    logger.info(f"Test MCP server started for database '{DATABASE_NAME}' with tables: {list(TABLES.keys())}")
-    print(f"Test MCP server started for database '{DATABASE_NAME}' with tables: {list(TABLES.keys())}")
+    print(f"MySQL MCP server started, connected to {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['db']}")
 
 if __name__ == "__main__":
     main()
