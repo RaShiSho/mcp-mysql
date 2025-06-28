@@ -173,7 +173,7 @@ async def interactive_cli():
 
                 print_header("自然语言数据库查询 CLI", "*")
                 print("你好！你可以用自然语言向我提问数据库相关的问题。")
-                print("例如: '查询所有用户' 或 '价格最高的笔记本电脑是什么'")
+                print("例如: '查询所有职员' 或 '学分最高的学生是谁？'")
                 print("输入 'exit' 或 'quit' 即可退出程序。")
 
                 while True:

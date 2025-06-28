@@ -1,0 +1,8 @@
+[2025-06-28T14:57:22.638532] Executing SQL: SELECT s_ID, i_ID FROM advisor;
+[2025-06-28T14:57:22.638532] Query succeeded. Rows returned: 2000
+[2025-06-28T15:00:16.701381] Executing SQL: SELECT name FROM advisor;
+[2025-06-28T15:00:16.701381] Query failed: SELECT name FROM advisor; | Error: (1054, "Unknown column 'name' in 'field list'")
+[2025-06-28T15:01:10.487571] Executing SQL: SELECT name FROM instructor;
+[2025-06-28T15:01:10.487571] Query succeeded. Rows returned: 50
+[2025-06-28T15:01:25.379219] Executing SQL: SELECT * FROM instructor;
+[2025-06-28T15:01:25.379219] Query succeeded. Rows returned: 50

@@ -10,14 +10,12 @@ mcp = FastMCP("mcp-mysql")
 
 
 # 日志初始化
-log_file = "mcp_mysql.log"
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-handler = logging.FileHandler("log.txt")
+handler = logging.FileHandler("mcp-mysql.log")
 logger.addHandler(handler)
 
 
