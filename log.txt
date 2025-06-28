@@ -20,3 +20,11 @@
 [2025-06-28T00:49:11.658698] [Blocked] Sensitive field access attempt: SELECT s_ID FROM advisor ORDER BY salary DESC LIMIT 10
 [2025-06-28T00:49:38.211711] [Blocked] Sensitive field access attempt: SELECT s_ID FROM advisor ORDER BY salary DESC LIMIT 10;
 [2025-06-28T00:50:34.159142] [Blocked] Sensitive field access attempt: SELECT s_ID FROM advisor ORDER BY salary DESC LIMIT 10;
+[2025-06-28T14:02:28.550019] Executing SQL: SELECT title, credits FROM course ORDER BY title, credits;
+[2025-06-28T14:02:28.550019] Query succeeded. Rows returned: 200
+[2025-06-28T14:03:26.356008] Executing SQL: SELECT course.title, course.credits, course.dept_name FROM course WHERE course.course_id IN (SELECT prereq.course_id FROM prereq GROUP BY prereq.course_id HAVING COUNT(prereq.prereq_id) > 1)
+[2025-06-28T14:03:26.356008] Query succeeded. Rows returned: 18
+[2025-06-28T14:04:01.095423] Executing SQL: SELECT DISTINCT s.name FROM student s WHERE s.ID IN (SELECT t.ID FROM takes t GROUP BY t.ID HAVING COUNT(DISTINCT t.course_id) > 1)
+[2025-06-28T14:04:01.095423] Query succeeded. Rows returned: 1568
+[2025-06-28T14:04:28.883181] Executing SQL: SELECT course.title FROM course WHERE course.course_id NOT IN (SELECT prereq.course_id FROM prereq)
+[2025-06-28T14:04:28.883181] Query succeeded. Rows returned: 121

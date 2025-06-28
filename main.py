@@ -129,7 +129,6 @@ def contains_sensitive_field(sql: str) -> bool:
 def query_data(sql: str) -> Dict[str, Any]:
     """Execute read-only SQL queries"""
 
-    print("\n ----- mcping ------ \n")
 
     timestamp = datetime.now().isoformat()
 
@@ -167,7 +166,6 @@ def query_data(sql: str) -> Dict[str, Any]:
             conn.commit()
 
             logger.info(f"[{timestamp}] Query succeeded. Rows returned: {len(results)}")
-            print("\n ----- logging ------ \n")
             
             # Convert results to serializable format
             return {
