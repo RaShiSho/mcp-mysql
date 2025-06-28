@@ -10,7 +10,7 @@ MCP 是一个开放协议，它为应用程序向 LLM 提供上下文的方式�
 大模型通过 stdio（标准输入输出）调用某个 MCP Server，然后 MCP 通过自身代码功能访问外部工具完成请求。
 
 
-## 项目架构
+## 🧱 项目架构
 - `main.py` : MCP Server 定义程序，调用此程序来连接数据库，执行SQL
 - `test.py` : 项目入口程序，使用此程序调用 LLM , MCP 等工具
 - `mcp-mysql.log` : MCP 查询日志文件
